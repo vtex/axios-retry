@@ -28,10 +28,16 @@
     // Style
     "object-shorthand": ["error", "always", { "avoidQuotes": true }],
     "quote-props": ["error", "consistent"], // All quotes or no quotes in a single object
-    "comma-dangle": ["warn", "never"], // Disallow trailing comma in the last element of a list
+    "comma-dangle": ["warn", "always-multiline"], // Disallow trailing comma in the last element of a list
     "padded-blocks": "off", // Allow spaces at the beginning of blocks
     "newline-per-chained-call": "off", // Allow chaining in a single line: Joi.string().required()
     "consistent-return": "off", // Allow if (error) { return ... } and no final return
     "arrow-body-style": "off" // Allow arrow functions with only a return statement
+  },
+  "parserOptions": {
+    "ecmaVersion": 2018,
+    "ecmaFeatures":{
+      "experimentalObjectRestSpread": true
+    }
   }
 }
