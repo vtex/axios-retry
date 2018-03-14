@@ -1,4 +1,7 @@
 import isRetryAllowed from 'is-retry-allowed';
+import axios from 'axios';
+
+const CancelToken = axios.CancelToken;
 
 const namespace = 'axios-retry';
 
@@ -164,14 +167,106 @@ function fixConfig(axios, config) {
  * @param {Function} [defaultOptions.retryDelay=noDelay]
  *        A function to determine the delay between retry requests
  */
+function createCancelToken() {
+  const cancelSource = CancelToken.source();
+  return {
+    cancelSource,
+    cancelToken: cancelSource.token,
+  };
+}
 export default function axiosRetry(axios, defaultOptions) {
+  const requests = [];
+
+  const getWaitTime = () => {
+  };
+
+  const retry = (config, source = 'none') => {
+    const cancelToken = createCancelToken();
+
+    const retryConfig = {
+      ...config,
+      ...cancelToken,
+      url: `${config.originalUrl}?source=${source}`,
+    };
+
+    return axios(retryConfig)
+      .catch(e => { });
+  };
+
   axios.interceptors.request.use((config) => {
     const currentState = getCurrentState(config);
     currentState.lastRequestTime = Date.now();
-    return config;
+    currentState.test = true;
+
+    const { retryTimeout, cancelToken, requestId } = config;
+
+    let curConfig = config;
+
+    if (!requestId) {
+      let requestResolve;
+      let requestReject;
+
+      const requestPromise = new Promise((resolve, reject) => {
+        requestResolve = resolve;
+        requestReject = reject;
+      });
+
+      curConfig = {
+        ...curConfig,
+        originalUrl: config.url,
+        requestPromise,
+        requestResolve,
+        requestReject,
+        requestId: Date.now(),
+      };
+    }
+
+    if (!cancelToken) {
+      curConfig = {
+        ...curConfig,
+        ...createCancelToken(),
+      };
+    }
+
+    curConfig = {
+      ...curConfig,
+      preventRetryFromTimeout: false,
+      preventRetryFromError: false,
+      hasRetriedFromTimeout: false,
+      hasRetriedFromError: false,
+    };
+
+    if (retryTimeout) {
+      setTimeout(() => {
+        if (!curConfig.preventRetryFromTimeout) {
+          curConfig.preventRetryFromError = true;
+          curConfig.hasRetriedFromTimeout = true;
+
+          retry(curConfig, 'timeout');
+        }
+      }, retryTimeout);
+    }
+
+    requests.push(curConfig);
+
+    return curConfig;
   });
 
-  axios.interceptors.response.use(null, error => {
+  axios.interceptors.response.use(response => {
+    const { config } = response;
+
+    // cancel all requests
+    requests
+      .filter(request => request.requestId === config.requestId)
+      .forEach(request => {
+        request.preventRetryFromTimeout = true;
+        request.preventRetryFromError = true;
+        request.cancelSource.cancel();
+      });
+
+    config.requestResolve(response)
+    return config.requestPromise;
+  }, error => {
     const config = error.config;
 
     // If we have no information to retry the request
@@ -182,13 +277,17 @@ export default function axiosRetry(axios, defaultOptions) {
     const {
       retries = 3,
       retryCondition = isNetworkOrIdempotentRequestError,
-      retryDelay = noDelay
+      retryDelay = noDelay,
     } = getRequestOptions(config, defaultOptions);
 
     const currentState = getCurrentState(config);
 
-    const shouldRetry = retryCondition(error)
-      && currentState.retryCount < retries;
+    const retryMeetsCondition = retryCondition(error);
+    const shouldRetry = retryMeetsCondition
+      // && currentState.retryCount < retries
+      && !config.preventRetryFromError;
+
+    config.preventRetryFromTimeout = true;
 
     if (shouldRetry) {
       currentState.retryCount++;
@@ -205,8 +304,17 @@ export default function axiosRetry(axios, defaultOptions) {
       }
 
       return new Promise((resolve) =>
-        setTimeout(() => resolve(axios(config)), delay)
+        setTimeout(() => {
+          if (!config.preventRetryFromError) {
+            config.hasRetriedFromError = true;
+            resolve(
+              retry(config, 'error')
+            );
+          }
+        }, delay)
       );
+    } else if (retryMeetsCondition && config.hasRetriedFromTimeout) {
+      return config.requestPromise;
     }
 
     return Promise.reject(error);
