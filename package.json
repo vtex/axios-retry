@@ -16,6 +16,7 @@
     "lint": "eslint es/**/*.js spec/**/*.spec.js",
     "pretest": "npm run lint",
     "test": "jasmine",
+    "test-only": "jasmine",
     "prebuild": "npm run test",
     "build": "rm -rf lib && babel es -d lib --source-maps",
     "watch": "rm -rf lib && babel es -w -d lib --source-maps",

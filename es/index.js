@@ -1,7 +1,7 @@
 import isRetryAllowed from 'is-retry-allowed';
-import axios from 'axios';
+import axiosLib from 'axios';
 
-const CancelToken = axios.CancelToken;
+const CancelToken = axiosLib.CancelToken;
 
 const namespace = 'axios-retry';
 
@@ -117,6 +117,13 @@ function fixConfig(axios, config) {
   }
 }
 
+function createCancelToken() {
+  const cancelSource = CancelToken.source();
+  return {
+    cancelSource,
+    cancelToken: cancelSource.token,
+  };
+}
 /**
  * Adds response interceptors to an axios instance to retry requests failed due to network issues
  *
@@ -166,31 +173,20 @@ function fixConfig(axios, config) {
  *        A function to determine if the error can be retried
  * @param {Function} [defaultOptions.retryDelay=noDelay]
  *        A function to determine the delay between retry requests
+ * @return {undefined}
  */
-function createCancelToken() {
-  const cancelSource = CancelToken.source();
-  return {
-    cancelSource,
-    cancelToken: cancelSource.token,
-  };
-}
 export default function axiosRetry(axios, defaultOptions) {
   const requests = [];
 
-  const getWaitTime = () => {
-  };
-
-  const retry = (config, source = 'none') => {
+  const retry = (config) => {
     const cancelToken = createCancelToken();
 
     const retryConfig = {
       ...config,
       ...cancelToken,
-      url: `${config.originalUrl}?source=${source}`,
     };
 
-    return axios(retryConfig)
-      .catch(e => { });
+    return axios(retryConfig);
   };
 
   axios.interceptors.request.use((config) => {
@@ -209,7 +205,7 @@ export default function axiosRetry(axios, defaultOptions) {
       const requestPromise = new Promise((resolve, reject) => {
         requestResolve = resolve;
         requestReject = reject;
-      });
+      }).catch(() => {});
 
       curConfig = {
         ...curConfig,
@@ -242,7 +238,8 @@ export default function axiosRetry(axios, defaultOptions) {
           curConfig.preventRetryFromError = true;
           curConfig.hasRetriedFromTimeout = true;
 
-          retry(curConfig, 'timeout');
+          const retryPromise = retry(curConfig);
+          curConfig.retryPromise = retryPromise;
         }
       }, retryTimeout);
     }
@@ -261,10 +258,14 @@ export default function axiosRetry(axios, defaultOptions) {
       .forEach(request => {
         request.preventRetryFromTimeout = true;
         request.preventRetryFromError = true;
+        if (request.retryPromise) {
+          request.retryPromise.catch(() => {});
+        }
         request.cancelSource.cancel();
       });
 
-    config.requestResolve(response)
+    config.requestResolve(response);
+
     return config.requestPromise;
   }, error => {
     const config = error.config;
@@ -284,7 +285,8 @@ export default function axiosRetry(axios, defaultOptions) {
 
     const retryMeetsCondition = retryCondition(error);
     const shouldRetry = retryMeetsCondition
-      // && currentState.retryCount < retries
+      && currentState.retryCount < retries
+      && !config.hasTimedOut
       && !config.preventRetryFromError;
 
     config.preventRetryFromTimeout = true;
@@ -301,23 +303,34 @@ export default function axiosRetry(axios, defaultOptions) {
         const lastRequestDuration = Date.now() - currentState.lastRequestTime;
         // Minimum 1ms timeout (passing 0 or less to XHR means no timeout)
         config.timeout = Math.max((config.timeout - lastRequestDuration) - delay, 1);
+        if (config.timeout === 1) {
+          config.hasTimedOut = true;
+        }
       }
 
-      return new Promise((resolve) =>
+      return new Promise((resolve, reject) => {
         setTimeout(() => {
           if (!config.preventRetryFromError) {
             config.hasRetriedFromError = true;
-            resolve(
-              retry(config, 'error')
-            );
+            config.retryPromise = retry(config)
+              .then(result => {
+                resolve(result);
+              })
+              .catch(retryError => {
+                reject(retryError);
+              });
           }
-        }, delay)
-      );
-    } else if (retryMeetsCondition && config.hasRetriedFromTimeout) {
+        }, delay);
+      });
+
+    } else if (retryMeetsCondition && !config.hasTimedOut && config.hasRetriedFromTimeout) {
       return config.requestPromise;
     }
 
     return Promise.reject(error);
+
+    // config.requestReject(error);
+    // return config.requestPromise;
   });
 }
 

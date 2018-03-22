@@ -10,6 +10,7 @@
     // Jasmine
     "jasmine/no-spec-dupes": ["warn", "branch"],
     "jasmine/no-suite-dupes":  ["warn", "branch"],
+    "jasmine/no-focused-tests": ["warn"],
 
     // Best practices
     "valid-jsdoc": ["warn", {
