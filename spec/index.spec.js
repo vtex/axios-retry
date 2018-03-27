@@ -464,18 +464,24 @@ describe('axiosRetry(axios, {retryTimeout})', () => {
     it('should get an ok response after error', done => {
       const client = axios.create();
 
+      const customError = {
+        ...NETWORK_ERROR,
+        message: 'falha',
+      };
+
       setupResponses(client, [
-        () => nock('http://example.com').get('/test').delay(150).replyWithError(NETWORK_ERROR),
-        () => nock('http://example.com').get('/test').delay(150).reply(200, 'It worked!'),
+        () => nock('http://example.com').get('/test').delay(200).replyWithError(customError),
+        () => nock('http://example.com').get('/test').delay(200).reply(200, 'It worked!'),
       ]);
 
       axiosRetry(client);
 
-      client.get('http://example.com/test', { retryTimeout: 100 }).then(response => {
+      client.get('http://example.com/test', { retryTimeout: 150 }).then(response => {
         expect(response.status).toBe(200);
         done();
       }, done.fail);
     });
+
     it('should get the first response after an error', done => {
       const client = axios.create();
 

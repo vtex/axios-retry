@@ -87,6 +87,10 @@ export function exponentialDelay(retryNumber = 0) {
 function getCurrentState(config) {
   const currentState = config[namespace] || {};
   currentState.retryCount = currentState.retryCount || 0;
+  currentState.requests = currentState.requests || [];
+  currentState.hasRetried = 'hasRetried' in currentState ? currentState.hasRetried : false;
+
+
   config[namespace] = currentState;
   return currentState;
 }
@@ -176,46 +180,37 @@ function createCancelToken() {
  * @return {undefined}
  */
 export default function axiosRetry(axios, defaultOptions) {
-  const requests = [];
-
   const retry = (config) => {
+    const currentState = getCurrentState(config);
+    const { hasRetried } = currentState;
+
     const cancelToken = createCancelToken();
+
+    const firstRetry = !hasRetried;
+    currentState.hasRetried = true;
 
     const retryConfig = {
       ...config,
       ...cancelToken,
     };
 
-    return axios(retryConfig);
+    return axios(retryConfig).catch(error => {
+
+      // returns promise rejection only if there are no remaining retries
+      // that is, only if every subsequent retry has been rejected
+      if (firstRetry) {
+        return Promise.reject(error);
+      }
+    });
   };
 
   axios.interceptors.request.use((config) => {
     const currentState = getCurrentState(config);
     currentState.lastRequestTime = Date.now();
-    currentState.test = true;
 
-    const { retryTimeout, cancelToken, requestId } = config;
+    const { retryTimeout, cancelToken } = config;
 
-    let curConfig = config;
-
-    if (!requestId) {
-      let requestResolve;
-      let requestReject;
-
-      const requestPromise = new Promise((resolve, reject) => {
-        requestResolve = resolve;
-        requestReject = reject;
-      }).catch(() => {});
-
-      curConfig = {
-        ...curConfig,
-        originalUrl: config.url,
-        requestPromise,
-        requestResolve,
-        requestReject,
-        requestId: Date.now(),
-      };
-    }
+    let curConfig = { ...config };
 
     if (!cancelToken) {
       curConfig = {
@@ -230,6 +225,7 @@ export default function axiosRetry(axios, defaultOptions) {
       preventRetryFromError: false,
       hasRetriedFromTimeout: false,
       hasRetriedFromError: false,
+      retryFromTimeout: null,
     };
 
     if (retryTimeout) {
@@ -238,35 +234,34 @@ export default function axiosRetry(axios, defaultOptions) {
           curConfig.preventRetryFromError = true;
           curConfig.hasRetriedFromTimeout = true;
 
-          const retryPromise = retry(curConfig);
-          curConfig.retryPromise = retryPromise;
+          curConfig.retryFromTimeout = retry({ ...curConfig });
         }
       }, retryTimeout);
     }
 
-    requests.push(curConfig);
+    currentState.requests.push(curConfig);
 
     return curConfig;
   });
 
   axios.interceptors.response.use(response => {
-    const { config } = response;
+    const returnValue = Promise.resolve(response);
 
-    // cancel all requests
-    requests
-      .filter(request => request.requestId === config.requestId)
+    const { config } = response;
+    if (!config) return returnValue;
+
+    const currentState = getCurrentState(config);
+    if (!currentState) return returnValue;
+
+    // cancel all pending requests
+    currentState.requests
       .forEach(request => {
         request.preventRetryFromTimeout = true;
         request.preventRetryFromError = true;
-        if (request.retryPromise) {
-          request.retryPromise.catch(() => {});
-        }
         request.cancelSource.cancel();
       });
 
-    config.requestResolve(response);
-
-    return config.requestPromise;
+    return returnValue;
   }, error => {
     const config = error.config;
 
@@ -311,8 +306,10 @@ export default function axiosRetry(axios, defaultOptions) {
       return new Promise((resolve, reject) => {
         setTimeout(() => {
           if (!config.preventRetryFromError) {
+            // console.log('will retry from error. request ' + config.retryNumber);
             config.hasRetriedFromError = true;
-            config.retryPromise = retry(config)
+            config.preventRetryFromTimeout = true;
+            return retry(config)
               .then(result => {
                 resolve(result);
               })
@@ -322,15 +319,13 @@ export default function axiosRetry(axios, defaultOptions) {
           }
         }, delay);
       });
-
+    // if it still can retry, but retry from error has been prevented
     } else if (retryMeetsCondition && !config.hasTimedOut && config.hasRetriedFromTimeout) {
-      return config.requestPromise;
+      return config.retryFromTimeout;
     }
 
+    // reject if can't retry
     return Promise.reject(error);
-
-    // config.requestReject(error);
-    // return config.requestPromise;
   });
 }
 
