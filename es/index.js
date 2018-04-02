@@ -89,7 +89,7 @@ function getCurrentState(config) {
   currentState.retryCount = currentState.retryCount || 0;
   currentState.requests = currentState.requests || [];
   currentState.hasRetried = 'hasRetried' in currentState ? currentState.hasRetried : false;
-
+  currentState.cancelled = 'cancelled' in currentState ? currentState.cancelled : false;
 
   config[namespace] = currentState;
   return currentState;
@@ -195,16 +195,17 @@ export default function axiosRetry(axios, defaultOptions) {
     };
 
     return axios(retryConfig).catch(error => {
-
       // returns promise rejection only if there are no remaining retries
       // that is, only if every subsequent retry has been rejected
-      if (firstRetry) {
+      const retryState = getCurrentState(retryConfig);
+      if (firstRetry && !retryState.cancelled) {
         return Promise.reject(error);
       }
     });
   };
 
   axios.interceptors.request.use((config) => {
+
     const currentState = getCurrentState(config);
     currentState.lastRequestTime = Date.now();
 
@@ -258,6 +259,7 @@ export default function axiosRetry(axios, defaultOptions) {
       .forEach(request => {
         request.preventRetryFromTimeout = true;
         request.preventRetryFromError = true;
+        currentState.cancelled = true;
         request.cancelSource.cancel();
       });
 
@@ -306,16 +308,15 @@ export default function axiosRetry(axios, defaultOptions) {
       return new Promise((resolve, reject) => {
         setTimeout(() => {
           if (!config.preventRetryFromError) {
-            // console.log('will retry from error. request ' + config.retryNumber);
             config.hasRetriedFromError = true;
             config.preventRetryFromTimeout = true;
             return retry(config)
-              .then(result => {
-                resolve(result);
-              })
-              .catch(retryError => {
-                reject(retryError);
-              });
+              .then(result => resolve(result))
+              .catch(e => reject(e));
+          } else if (config.hasRetriedFromTimeout) {
+            return config.retryFromTimeout
+              .then(result => resolve(result))
+              .catch(e => reject(e));
           }
         }, delay);
       });
