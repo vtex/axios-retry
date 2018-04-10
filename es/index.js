@@ -96,6 +96,7 @@ function getCurrentState(config) {
   currentState.requests = currentState.requests || [];
   currentState.hasRetried = 'hasRetried' in currentState ? currentState.hasRetried : false;
   currentState.cancelled = 'cancelled' in currentState ? currentState.cancelled : false;
+  currentState.response = 'response' in currentState ? currentState.response : null;
 
   config[namespace] = currentState;
   return currentState;
@@ -265,6 +266,8 @@ export default function axiosRetry(axios, defaultOptions) {
     const currentState = getCurrentState(config);
     if (!currentState) return returnValue;
 
+    currentState.response = response;
+
     // cancel all pending requests
     currentState.requests
       .forEach(request => {
@@ -281,6 +284,12 @@ export default function axiosRetry(axios, defaultOptions) {
     // If we have no information to retry the request
     if (!config) {
       return Promise.reject(error);
+    }
+
+    const currentState = getCurrentState(config);
+
+    if (currentState && currentState.response) {
+      return Promise.resolve(currentState.response);
     }
 
     const {
