@@ -94,7 +94,6 @@ function getCurrentState(config) {
   const currentState = config[namespace] || {};
   currentState.retryCount = currentState.retryCount || 0;
   currentState.requests = currentState.requests || [];
-  currentState.hasRetried = 'hasRetried' in currentState ? currentState.hasRetried : false;
   currentState.cancelled = 'cancelled' in currentState ? currentState.cancelled : false;
   currentState.response = 'response' in currentState ? currentState.response : null;
 
@@ -206,31 +205,15 @@ export default function axiosRetry(axios, defaultOptions) {
   };
 
   const retry = (config) => {
-    const currentState = getCurrentState(config);
-    const { hasRetried } = currentState;
-
-    const cancelToken = createCancelToken();
-
-    const firstRetry = !hasRetried;
-    currentState.hasRetried = true;
-
-    const retryConfig = {
+    const request = axios({
       ...config,
-      ...cancelToken,
-    };
-
-    return axios(retryConfig).catch(error => {
-      // returns promise rejection only if there are no remaining retries
-      // that is, only if every subsequent retry has been rejected
-      const retryState = getCurrentState(retryConfig);
-      if (firstRetry && !retryState.cancelled) {
-        return Promise.reject(error);
-      }
     });
+    request.catch(() => {});
+
+    return request;
   };
 
   axios.interceptors.request.use((config) => {
-
     const currentState = getCurrentState(config);
     currentState.lastRequestTime = Date.now();
 
