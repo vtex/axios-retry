@@ -187,6 +187,24 @@ function createCancelToken() {
  * @return {undefined}
  */
 export default function axiosRetry(axios, defaultOptions) {
+  const cancelAll = (config) => {
+    const currentState = getCurrentState(config);
+
+    currentState.cancelled = true;
+
+    const { requests } = currentState;
+
+    requests
+      .forEach(request => {
+        request.preventRetryFromTimeout = true;
+        request.preventRetryFromError = true;
+      });
+
+    if (config.cancelSource) {
+      config.cancelSource.cancel({ config });
+    }
+  };
+
   const retry = (config) => {
     const currentState = getCurrentState(config);
     const { hasRetried } = currentState;
@@ -269,17 +287,12 @@ export default function axiosRetry(axios, defaultOptions) {
     currentState.response = response;
 
     // cancel all pending requests
-    currentState.requests
-      .forEach(request => {
-        request.preventRetryFromTimeout = true;
-        request.preventRetryFromError = true;
-        currentState.cancelled = true;
-        request.cancelSource.cancel();
-      });
+    cancelAll(config);
 
     return returnValue;
   }, error => {
-    const config = error.config;
+    const isCancellation = error.constructor.name === 'Cancel';
+    const config = isCancellation ? error.message.config : error.config;
 
     // If we have no information to retry the request
     if (!config) {
@@ -298,8 +311,6 @@ export default function axiosRetry(axios, defaultOptions) {
       retryDelay = noDelay,
       qwestLegacy = false,
     } = getRequestOptions(config, defaultOptions);
-
-    const currentState = getCurrentState(config);
 
     const retryMeetsCondition = retryCondition(error);
     const shouldRetry =
