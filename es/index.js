@@ -340,25 +340,34 @@ export default function axiosRetry(axios, defaultOptions) {
 
       return new Promise((resolve, reject) => {
         setTimeout(() => {
+          // retries if it should continue with retrying from error
           if (!config.preventRetryFromError) {
             config.hasRetriedFromError = true;
             config.preventRetryFromTimeout = true;
             return retry(config)
-              .then(result => resolve(result))
-              .catch(e => reject(e));
+              .then(result => {
+                resolve(result);
+              })
+              .catch(e => {
+                reject(e);
+              });
           } else if (config.hasRetriedFromTimeout) {
+            // if in this meantime (i.e. the delay from retrying from error)
+            // the retry from timeout has been dispatched, return that
+            // instead and avoid retrying
             return config.retryFromTimeout
               .then(result => resolve(result))
               .catch(e => reject(e));
           }
         }, delay);
       });
-    // if it still can retry, but retry from error has been prevented
+    // if it still can retry, but retry from error has been prevented,
+    // and it has retried from timeout
     } else if (retryMeetsCondition && !config.hasTimedOut && config.hasRetriedFromTimeout) {
       return config.retryFromTimeout;
     }
 
-    // reject if can't retry
+    // reject if can't retry anymore
     return Promise.reject(error);
   });
 }
