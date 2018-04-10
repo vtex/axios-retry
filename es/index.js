@@ -10,9 +10,15 @@ const namespace = 'axios-retry';
  * @return {boolean}
  */
 export function isNetworkError(error) {
+  const {
+    qwestLegacy = false,
+  } = error.config || {};
+
   return !error.response
     && Boolean(error.code) // Prevents retrying cancelled requests
-    && error.code !== 'ECONNABORTED' // Prevents retrying timed out requests
+    && (
+      error.code !== 'ECONNABORTED' || !!qwestLegacy
+    ) // Prevents retrying timed out requests
     && isRetryAllowed(error); // Prevents retrying unsafe errors
 }
 
@@ -220,8 +226,13 @@ export default function axiosRetry(axios, defaultOptions) {
       };
     }
 
+    const {
+      qwestLegacy = false,
+    } = getRequestOptions(config, defaultOptions);
+
     curConfig = {
       ...curConfig,
+      qwestLegacy,
       preventRetryFromTimeout: false,
       preventRetryFromError: false,
       hasRetriedFromTimeout: false,
@@ -276,14 +287,16 @@ export default function axiosRetry(axios, defaultOptions) {
       retries = 3,
       retryCondition = isNetworkOrIdempotentRequestError,
       retryDelay = noDelay,
+      qwestLegacy = false,
     } = getRequestOptions(config, defaultOptions);
 
     const currentState = getCurrentState(config);
 
     const retryMeetsCondition = retryCondition(error);
-    const shouldRetry = retryMeetsCondition
+    const shouldRetry =
+      retryMeetsCondition
       && currentState.retryCount < retries
-      && !config.hasTimedOut
+      && (!config.hasTimedOut || qwestLegacy)
       && !config.preventRetryFromError;
 
     config.preventRetryFromTimeout = true;
@@ -296,7 +309,7 @@ export default function axiosRetry(axios, defaultOptions) {
       // with circular structures: https://github.com/mzabriskie/axios/issues/370
       fixConfig(axios, config);
 
-      if (config.timeout && currentState.lastRequestTime) {
+      if (!qwestLegacy && config.timeout && currentState.lastRequestTime) {
         const lastRequestDuration = Date.now() - currentState.lastRequestTime;
         // Minimum 1ms timeout (passing 0 or less to XHR means no timeout)
         config.timeout = Math.max((config.timeout - lastRequestDuration) - delay, 1);
