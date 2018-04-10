@@ -108,9 +108,10 @@ describe('axiosRetry(axios, { retries, retryCondition })', () => {
         setupResponses(client, [
           () => nock('http://example.com').get('/test').replyWithError(new Error('foo error')),
           () => nock('http://example.com').get('/test').replyWithError(NETWORK_ERROR),
+          () => nock('http://example.com').get('/test').replyWithError(NETWORK_ERROR),
         ]);
 
-        axiosRetry(client, { retries: 1, retryCondition: () => true });
+        axiosRetry(client, { retries: 2, retryCondition: () => true });
 
         client.get('http://example.com/test').then(done.fail, error => {
           expect(error).toBe(NETWORK_ERROR);
@@ -461,6 +462,22 @@ describe('axiosRetry(axios, {retryTimeout})', () => {
       }, done.fail).catch(done.fail);
     });
 
+    it('should return the first request that responds ok, even if it comes later', done => {
+      const client = axios.create();
+
+      setupResponses(client, [
+        () => nock('http://example.com').get('/test').delay(3500).reply(200, 'Response 1'),
+        () => nock('http://example.com').get('/test').delay(150).reply(200, 'Response 2'),
+      ]);
+
+      axiosRetry(client);
+
+      client.get('http://example.com/test', { retryTimeout: 100 }).then(response => {
+        expect(String(response.data)).toBe('Response 2');
+        done();
+      }, done.fail).catch(done.fail);
+    });
+
     it('should get an ok response after error', done => {
       const client = axios.create();
 
@@ -497,6 +514,59 @@ describe('axiosRetry(axios, {retryTimeout})', () => {
         expect(response.data).toBe('It worked!');
         done();
       }, done.fail);
+    });
+  });
+});
+
+describe('cancellation', () => {
+  describe('with cancel token', () => {
+    it('should abort', done => {
+      const client = axios.create();
+
+      setupResponses(client, [
+        () => nock('http://example.com').get('/test').delay(150).reply(200, 'It worked!'),
+      ]);
+
+      const cancelSource = axios.CancelToken.source();
+      const cancelToken = cancelSource.token;
+
+      client.get('http://example.com/test', { cancelToken })
+        .then(done.fail)
+        .catch(error => {
+          expect(error.constructor.name).toBe('Cancel');
+          expect(error.message).toBe('user cancelled');
+          done();
+        });
+
+      setTimeout(() => cancelSource.cancel('user cancelled'), 100);
+    });
+  });
+});
+
+describe('qwest legacy', () => {
+  describe('timeout per request', () => {
+    it('should use the timeout value per attempt instead of using it for all retries', done => {
+      const client = axios.create();
+
+      setupResponses(client, [
+        () => nock('http://example.com').get('/test').delay(150).reply(200, 'First attempt'),
+        () => nock('http://example.com').get('/test').delay(150).reply(200, 'Second attempt'),
+        () => nock('http://example.com').get('/test').delay(50).reply(200, 'Third attempt'),
+      ]);
+
+      axiosRetry(client, {
+        retries: 5,
+        qwestLegacy: true,
+      });
+
+      client.get('http://example.com/test', {
+        timeout: 100,
+      })
+        .then(response => {
+          expect(response.data).toBe('Third attempt');
+          done();
+        })
+        .catch(done.fail);
     });
   });
 });
