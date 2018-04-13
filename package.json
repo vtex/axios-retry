@@ -1,6 +1,6 @@
 {
   "name": "@vtexlab/axios-concurrent-retry",
-  "version": "4.0.1",
+  "version": "4.0.3",
   "author": "Rubén Norte <ruben.norte@softonic.com>",
   "description": "Axios plugin that intercepts failed requests and retries them whenever possible, and runs concurrent requests after a set timeout.",
   "license": "Apache-2.0",
@@ -22,7 +22,7 @@
     "watch": "rm -rf lib && babel es -w -d lib --source-maps",
     "prerelease": "npm run build",
     "release": "npm version -m \"New version: %s\"",
-    "postrelease": "npm run push && npm publish",
+    "postrelease": "npm run push && npm publish --access public",
     "push": "git push origin master && git push origin --tags"
   },
   "dependencies": {
