@@ -1,9 +1,9 @@
-import isRetryAllowed from 'is-retry-allowed';
-import axiosLib from 'axios';
+import isRetryAllowed from 'is-retry-allowed'
+import axiosLib from 'axios'
 
-const CancelToken = axiosLib.CancelToken;
+const CancelToken = axiosLib.CancelToken
 
-const namespace = 'axios-retry';
+const namespace = 'axios-retry'
 
 /**
  * @param  {Error}  error
@@ -12,26 +12,26 @@ const namespace = 'axios-retry';
 export function isNetworkError(error) {
   const {
     qwestLegacy = false,
-  } = error.config || {};
+  } = error.config || {}
 
-  return !error.response
-    && Boolean(error.code) // Prevents retrying cancelled requests
-    && (
+  return !error.response &&
+    Boolean(error.code) && // Prevents retrying cancelled requests
+    (
       error.code !== 'ECONNABORTED' || !!qwestLegacy
-    ) // Prevents retrying timed out requests
-    && isRetryAllowed(error); // Prevents retrying unsafe errors
+    ) && // Prevents retrying timed out requests
+    isRetryAllowed(error) // Prevents retrying unsafe errors
 }
 
-const SAFE_HTTP_METHODS = ['get', 'head', 'options'];
-const IDEMPOTENT_HTTP_METHODS = SAFE_HTTP_METHODS.concat(['put', 'delete']);
+const SAFE_HTTP_METHODS = ['get', 'head', 'options']
+const IDEMPOTENT_HTTP_METHODS = SAFE_HTTP_METHODS.concat(['put', 'delete'])
 
 /**
  * @param  {Error}  error
  * @return {boolean}
  */
 export function isRetryableError(error) {
-  return error.code !== 'ECONNABORTED'
-    && (!error.response || (error.response.status >= 500 && error.response.status <= 599));
+  return error.code !== 'ECONNABORTED' &&
+    (!error.response || (error.response.status >= 500 && error.response.status <= 599))
 }
 
 /**
@@ -41,10 +41,10 @@ export function isRetryableError(error) {
 export function isSafeRequestError(error) {
   if (!error.config) {
     // Cannot determine if the request can be retried
-    return false;
+    return false
   }
 
-  return isRetryableError(error) && SAFE_HTTP_METHODS.indexOf(error.config.method) !== -1;
+  return isRetryableError(error) && SAFE_HTTP_METHODS.indexOf(error.config.method) !== -1
 }
 
 /**
@@ -54,10 +54,10 @@ export function isSafeRequestError(error) {
 export function isIdempotentRequestError(error) {
   if (!error.config) {
     // Cannot determine if the request can be retried
-    return false;
+    return false
   }
 
-  return isRetryableError(error) && IDEMPOTENT_HTTP_METHODS.indexOf(error.config.method) !== -1;
+  return isRetryableError(error) && IDEMPOTENT_HTTP_METHODS.indexOf(error.config.method) !== -1
 }
 
 /**
@@ -65,14 +65,14 @@ export function isIdempotentRequestError(error) {
  * @return {boolean}
  */
 export function isNetworkOrIdempotentRequestError(error) {
-  return isNetworkError(error) || isIdempotentRequestError(error);
+  return isNetworkError(error) || isIdempotentRequestError(error)
 }
 
 /**
  * @return {number} - delay in milliseconds, always 0
  */
 function noDelay() {
-  return 0;
+  return 0
 }
 
 /**
@@ -80,9 +80,9 @@ function noDelay() {
  * @return {number} - delay in milliseconds
  */
 export function exponentialDelay(retryNumber = 0) {
-  const delay = Math.pow(2, retryNumber) * 100;
-  const randomSum = delay * 0.2 * Math.random(); // 0-20% of the delay
-  return delay + randomSum;
+  const delay = Math.pow(2, retryNumber) * 100
+  const randomSum = delay * 0.2 * Math.random() // 0-20% of the delay
+  return delay + randomSum
 }
 
 /**
@@ -91,14 +91,14 @@ export function exponentialDelay(retryNumber = 0) {
  * @return {Object}
  */
 function getCurrentState(config) {
-  const currentState = config[namespace] || {};
-  currentState.retryCount = currentState.retryCount || 0;
-  currentState.requests = currentState.requests || [];
-  currentState.cancelled = 'cancelled' in currentState ? currentState.cancelled : false;
-  currentState.response = 'response' in currentState ? currentState.response : null;
+  const currentState = config[namespace] || {}
+  currentState.retryCount = currentState.retryCount || 0
+  currentState.requests = currentState.requests || []
+  currentState.cancelled = 'cancelled' in currentState ? currentState.cancelled : false
+  currentState.response = 'response' in currentState ? currentState.response : null
 
-  config[namespace] = currentState;
-  return currentState;
+  config[namespace] = currentState
+  return currentState
 }
 
 /**
@@ -108,7 +108,7 @@ function getCurrentState(config) {
  * @return {AxiosRetryConfig}
  */
 function getRequestOptions(config, defaultOptions) {
-  return Object.assign({}, defaultOptions, config[namespace]);
+  return Object.assign({}, defaultOptions, config[namespace])
 }
 
 /**
@@ -117,22 +117,22 @@ function getRequestOptions(config, defaultOptions) {
  */
 function fixConfig(axios, config) {
   if (axios.defaults.agent === config.agent) {
-    delete config.agent;
+    delete config.agent
   }
   if (axios.defaults.httpAgent === config.httpAgent) {
-    delete config.httpAgent;
+    delete config.httpAgent
   }
   if (axios.defaults.httpsAgent === config.httpsAgent) {
-    delete config.httpsAgent;
+    delete config.httpsAgent
   }
 }
 
 function createCancelToken() {
-  const cancelSource = CancelToken.source();
+  const cancelSource = CancelToken.source()
   return {
     cancelSource,
     cancelToken: cancelSource.token,
-  };
+  }
 }
 /**
  * Adds response interceptors to an axios instance to retry requests failed due to network issues
@@ -187,50 +187,50 @@ function createCancelToken() {
  */
 export default function axiosRetry(axios, defaultOptions) {
   const cancelAll = (config) => {
-    const currentState = getCurrentState(config);
+    const currentState = getCurrentState(config)
 
-    currentState.cancelled = true;
+    currentState.cancelled = true
 
-    const { requests } = currentState;
+    const { requests } = currentState
 
     requests
       .forEach(request => {
-        request.preventRetryFromTimeout = true;
-        request.preventRetryFromError = true;
-      });
+        request.preventRetryFromTimeout = true
+        request.preventRetryFromError = true
+      })
 
     if (config.cancelSource) {
-      config.cancelSource.cancel({ config });
+      config.cancelSource.cancel({ config })
     }
-  };
+  }
 
   const retry = (config) => {
     const request = axios({
       ...config,
-    });
-    request.catch(() => {});
+    })
+    request.catch(() => {})
 
-    return request;
-  };
+    return request
+  }
 
   axios.interceptors.request.use((config) => {
-    const currentState = getCurrentState(config);
-    currentState.lastRequestTime = Date.now();
+    const currentState = getCurrentState(config)
+    currentState.lastRequestTime = Date.now()
 
-    const { retryTimeout, cancelToken } = config;
+    const { retryTimeout, cancelToken } = config
 
-    let curConfig = { ...config };
+    let curConfig = { ...config }
 
     if (!cancelToken) {
       curConfig = {
         ...curConfig,
         ...createCancelToken(),
-      };
+      }
     }
 
     const {
       qwestLegacy = false,
-    } = getRequestOptions(config, defaultOptions);
+    } = getRequestOptions(config, defaultOptions)
 
     curConfig = {
       ...curConfig,
@@ -240,52 +240,52 @@ export default function axiosRetry(axios, defaultOptions) {
       hasRetriedFromTimeout: false,
       hasRetriedFromError: false,
       retryFromTimeout: null,
-    };
+    }
 
     if (retryTimeout) {
       setTimeout(() => {
         if (!curConfig.preventRetryFromTimeout) {
-          curConfig.preventRetryFromError = true;
-          curConfig.hasRetriedFromTimeout = true;
+          curConfig.preventRetryFromError = true
+          curConfig.hasRetriedFromTimeout = true
 
-          curConfig.retryFromTimeout = retry({ ...curConfig });
+          curConfig.retryFromTimeout = retry({ ...curConfig })
         }
-      }, retryTimeout);
+      }, retryTimeout)
     }
 
-    currentState.requests.push(curConfig);
+    currentState.requests.push(curConfig)
 
-    return curConfig;
-  });
+    return curConfig
+  })
 
   axios.interceptors.response.use(response => {
-    const returnValue = Promise.resolve(response);
+    const returnValue = Promise.resolve(response)
 
-    const { config } = response;
-    if (!config) return returnValue;
+    const { config } = response
+    if (!config) return returnValue
 
-    const currentState = getCurrentState(config);
-    if (!currentState) return returnValue;
+    const currentState = getCurrentState(config)
+    if (!currentState) return returnValue
 
-    currentState.response = response;
+    currentState.response = response
 
     // cancel all pending requests
-    cancelAll(config);
+    cancelAll(config)
 
-    return returnValue;
+    return returnValue
   }, error => {
-    const isCancellation = error.constructor.name === 'Cancel';
-    const config = isCancellation ? error.message.config : error.config;
+    const isCancellation = error.constructor.name === 'Cancel'
+    const config = isCancellation ? error.message.config : error.config
 
     // If we have no information to retry the request
     if (!config) {
-      return Promise.reject(error);
+      return Promise.reject(error)
     }
 
-    const currentState = getCurrentState(config);
+    const currentState = getCurrentState(config)
 
     if (currentState && currentState.response) {
-      return Promise.resolve(currentState.response);
+      return Promise.resolve(currentState.response)
     }
 
     const {
@@ -293,31 +293,31 @@ export default function axiosRetry(axios, defaultOptions) {
       retryCondition = isNetworkOrIdempotentRequestError,
       retryDelay = noDelay,
       qwestLegacy = false,
-    } = getRequestOptions(config, defaultOptions);
+    } = getRequestOptions(config, defaultOptions)
 
-    const retryMeetsCondition = retryCondition(error);
+    const retryMeetsCondition = retryCondition(error)
     const shouldRetry =
-      retryMeetsCondition
-      && currentState.retryCount < retries
-      && (!config.hasTimedOut || qwestLegacy)
-      && !config.preventRetryFromError;
+      retryMeetsCondition &&
+      currentState.retryCount < retries &&
+      (!config.hasTimedOut || qwestLegacy) &&
+      !config.preventRetryFromError
 
-    config.preventRetryFromTimeout = true;
+    config.preventRetryFromTimeout = true
 
     if (shouldRetry) {
-      currentState.retryCount++;
-      const delay = retryDelay(currentState.retryCount, error);
+      currentState.retryCount++
+      const delay = retryDelay(currentState.retryCount, error)
 
       // Axios fails merging this configuration to the default configuration because it has an issue
       // with circular structures: https://github.com/mzabriskie/axios/issues/370
-      fixConfig(axios, config);
+      fixConfig(axios, config)
 
       if (!qwestLegacy && config.timeout && currentState.lastRequestTime) {
-        const lastRequestDuration = Date.now() - currentState.lastRequestTime;
+        const lastRequestDuration = Date.now() - currentState.lastRequestTime
         // Minimum 1ms timeout (passing 0 or less to XHR means no timeout)
-        config.timeout = Math.max((config.timeout - lastRequestDuration) - delay, 1);
+        config.timeout = Math.max((config.timeout - lastRequestDuration) - delay, 1)
         if (config.timeout === 1) {
-          config.hasTimedOut = true;
+          config.hasTimedOut = true
         }
       }
 
@@ -325,39 +325,39 @@ export default function axiosRetry(axios, defaultOptions) {
         setTimeout(() => {
           // retries if it should continue with retrying from error
           if (!config.preventRetryFromError) {
-            config.hasRetriedFromError = true;
-            config.preventRetryFromTimeout = true;
+            config.hasRetriedFromError = true
+            config.preventRetryFromTimeout = true
             return retry(config)
               .then(result => {
-                resolve(result);
+                resolve(result)
               })
               .catch(e => {
-                reject(e);
-              });
+                reject(e)
+              })
           } else if (config.hasRetriedFromTimeout) {
             // if in this meantime (i.e. the delay from retrying from error)
             // the retry from timeout has been dispatched, return that
             // instead and avoid retrying
             return config.retryFromTimeout
               .then(result => resolve(result))
-              .catch(e => reject(e));
+              .catch(e => reject(e))
           }
-        }, delay);
-      });
+        }, delay)
+      })
     // if it still can retry, but retry from error has been prevented,
     // and it has retried from timeout
     } else if (retryMeetsCondition && !config.hasTimedOut && config.hasRetriedFromTimeout) {
-      return config.retryFromTimeout;
+      return config.retryFromTimeout
     }
 
     // reject if can't retry anymore
-    return Promise.reject(error);
-  });
+    return Promise.reject(error)
+  })
 }
 
 // Compatibility with CommonJS
-axiosRetry.isNetworkError = isNetworkError;
-axiosRetry.isSafeRequestError = isSafeRequestError;
-axiosRetry.isIdempotentRequestError = isIdempotentRequestError;
-axiosRetry.isNetworkOrIdempotentRequestError = isNetworkOrIdempotentRequestError;
-axiosRetry.exponentialDelay = exponentialDelay;
+axiosRetry.isNetworkError = isNetworkError
+axiosRetry.isSafeRequestError = isSafeRequestError
+axiosRetry.isIdempotentRequestError = isIdempotentRequestError
+axiosRetry.isNetworkOrIdempotentRequestError = isNetworkOrIdempotentRequestError
+axiosRetry.exponentialDelay = exponentialDelay
