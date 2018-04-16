@@ -5,17 +5,17 @@ Axios plugin that intercepts failed requests and retries them whenever possible.
 ## Installation
 
 ```bash
-npm install axios-retry
+npm install @vtex/axios-concurrent-retry
 ```
 
 ## Usage
 
 ```js
 // CommonJS
-// const axiosRetry = require('axios-retry');
+// const axiosRetry = require('@vtex/axios-concurrent-retry');
 
 // ES6
-import axiosRetry from 'axios-retry';
+import axiosRetry from '@vtex/axios-concurrent-retry';
 
 axiosRetry(axios, { retries: 3 });
 
