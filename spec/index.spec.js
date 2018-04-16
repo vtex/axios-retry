@@ -337,6 +337,7 @@ describe('isSafeRequestError(error)', () => {
     expect(isSafeRequestError(errorResponse)).toBe(false)
   })
 
+  // eslint-disable-next-line jasmine/no-spec-dupes
   it('should be false for aborted requests', () => {
     const errorResponse = new Error('Error response')
     errorResponse.code = 'ECONNABORTED'
@@ -417,6 +418,7 @@ describe('exponentialDelay', () => {
 })
 
 describe('isRetryableError(error)', () => {
+  // eslint-disable-next-line jasmine/no-spec-dupes
   it('should be false for aborted requests', () => {
     const errorResponse = new Error('Error response')
     errorResponse.code = 'ECONNABORTED'
