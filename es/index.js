@@ -275,7 +275,7 @@ export default function axiosRetry(axios, defaultOptions) {
     return returnValue
   }, error => {
     const isCancellation = error.constructor.name === 'Cancel'
-    const config = isCancellation ? error.message.config : error.config
+    const config = isCancellation && error.message && error.message.config ? error.message.config : error.config
 
     // If we have no information to retry the request
     if (!config) {
