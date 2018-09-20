@@ -270,6 +270,7 @@ export default function axiosRetry(axios, defaultOptions) {
     return curConfig
   })
 
+  // In case of success
   axios.interceptors.response.use(response => {
     const returnValue = Promise.resolve(response)
 
@@ -286,6 +287,8 @@ export default function axiosRetry(axios, defaultOptions) {
 
     return returnValue
   }, error => {
+    // In case of error
+
     const isCancellation = error.__CANCEL__
     const config = isCancellation && error.message && error.message.config ? error.message.config : error.config
 
