@@ -136,13 +136,18 @@ function createCancelToken() {
   }
 }
 
+function removeCircular(obj) {
+  return JSON.parse(safeStringify(obj))
+}
+
 function cleanupOutput(output) {
-  if (!('config' in output)) {
-    return output
+  const { config, xhr } = output
+  if (config) {
+    output.config = removeCircular(config)
   }
-  const { config } = output
-  const safeConfig = JSON.parse(safeStringify(config))
-  output.config = safeConfig
+  if (xhr) {
+    output.xhr = removeCircular(xhr)
+  }
   return output
 }
 
