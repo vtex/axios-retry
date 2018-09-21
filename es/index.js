@@ -137,17 +137,17 @@ function createCancelToken() {
 }
 
 function removeCircular(obj) {
-  return JSON.parse(safeStringify(obj))
+  if (obj) {
+    return JSON.parse(safeStringify(obj))
+  }
+  return obj
 }
 
 function cleanupOutput(output) {
-  const { config, xhr } = output
-  if (config) {
-    output.config = removeCircular(config)
-  }
-  if (xhr) {
-    output.xhr = removeCircular(xhr)
-  }
+  const keys = Object.keys(output)
+  keys.forEach(key => {
+    output[key] = removeCircular(output[key])
+  })
   return output
 }
 
@@ -299,7 +299,7 @@ export default function axiosRetry(axios, defaultOptions) {
 
     // If we have no information to retry the request
     if (!config) {
-      return Promise.reject(error)
+      return Promise.reject(cleanupOutput(error))
     }
 
     const currentState = getCurrentState(config)
