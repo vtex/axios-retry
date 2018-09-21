@@ -1,5 +1,6 @@
 import isRetryAllowed from 'is-retry-allowed'
 import axiosLib from 'axios'
+import safeStringify from 'fast-safe-stringify'
 
 const CancelToken = axiosLib.CancelToken
 
@@ -134,6 +135,17 @@ function createCancelToken() {
     cancelToken: cancelSource.token,
   }
 }
+
+function cleanupOutput(output) {
+  if (!('config' in output)) {
+    return output
+  }
+  const { config } = output
+  const safeConfig = JSON.parse(safeStringify(config))
+  output.config = safeConfig
+  return output
+}
+
 /**
  * Adds response interceptors to an axios instance to retry requests failed due to network issues
  *
@@ -258,6 +270,7 @@ export default function axiosRetry(axios, defaultOptions) {
     return curConfig
   })
 
+  // In case of success
   axios.interceptors.response.use(response => {
     const returnValue = Promise.resolve(response)
 
@@ -274,6 +287,8 @@ export default function axiosRetry(axios, defaultOptions) {
 
     return returnValue
   }, error => {
+    // In case of error
+
     const isCancellation = error.__CANCEL__
     const config = isCancellation && error.message && error.message.config ? error.message.config : error.config
 
@@ -332,7 +347,7 @@ export default function axiosRetry(axios, defaultOptions) {
                 resolve(result)
               })
               .catch(e => {
-                reject(e)
+                reject(cleanupOutput(e))
               })
           } else if (config.hasRetriedFromTimeout) {
             // if in this meantime (i.e. the delay from retrying from error)
@@ -340,7 +355,9 @@ export default function axiosRetry(axios, defaultOptions) {
             // instead and avoid retrying
             return config.retryFromTimeout
               .then(result => resolve(result))
-              .catch(e => reject(e))
+              .catch(e => {
+                reject(cleanupOutput(e))
+              })
           }
         }, delay)
       })
@@ -351,7 +368,7 @@ export default function axiosRetry(axios, defaultOptions) {
     }
 
     // reject if can't retry anymore
-    return Promise.reject(error)
+    return Promise.reject(cleanupOutput(error))
   })
 }
 
