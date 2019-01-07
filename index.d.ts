@@ -26,9 +26,9 @@ export interface IAxiosRetryConfig {
 export interface IAxiosRetry {
   (
     axios: axios.AxiosStatic | axios.AxiosInstance,
-    axiosRetryConfig?: IAxiosRetryConfig,
-    exponentialDelay?: number
-  )
+    axiosRetryConfig?: IAxiosRetryConfig
+  );
+  exponentialDelay(retryNumber?: number): number;
 }
 
 declare const axiosRetry: IAxiosRetry
